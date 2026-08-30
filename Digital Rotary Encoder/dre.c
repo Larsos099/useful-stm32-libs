@@ -5,9 +5,10 @@
  *      Author: larsl
  */
 #include "dre.h"
-static int32_t s_encoderAccum = 0;
 static int32_t DRE_ConvertCountsToSteps(int32_t *accumulator,
 		int32_t difference, int32_t countsPerDetent) {
+	if (countsPerDetent == 0)
+		countsPerDetent = 1;
 	*accumulator += difference;
 
 	int32_t steps = *accumulator / countsPerDetent;
@@ -16,12 +17,13 @@ static int32_t DRE_ConvertCountsToSteps(int32_t *accumulator,
 
 	return steps;
 }
-void DRE_Init(dre_t *target, TIM_HandleTypeDef *htim, uint16_t max,
-		uint16_t min, void (*onClickUp)(uint8_t, void*, void*),
+void DRE_Init(dre_t *target, TIM_HandleTypeDef *htim, int32_t max, int32_t min,
+		void (*onClickUp)(uint8_t, void*, void*),
 		void (*onClickDown)(uint8_t, void*, void*),
 		void (*onButtonPress)(uint8_t, void*, void*),
 		GPIO_TypeDef *buttonGPIOPort, uint16_t buttonGPIOPin, bool toggle,
-		int32_t startValue, bool hasButton, uint8_t countsPerDetent) {
+		int32_t startValue, bool hasButton, uint8_t countsPerDetent,
+		bool buttonActiveLow) {
 	dre_t new = { 0 };
 	new.htim = htim;
 	new.max = max;
@@ -35,33 +37,60 @@ void DRE_Init(dre_t *target, TIM_HandleTypeDef *htim, uint16_t max,
 	new.startValue = startValue;
 	__HAL_TIM_SET_COUNTER(htim, (uint16_t )startValue);
 	new.value = startValue;
+	new.lastValue = startValue;
 	new.hasButton = hasButton;
 	new.countsPerDetent = countsPerDetent;
+	new.lastValue = startValue;
+	new.buttonActiveLow = buttonActiveLow;
+	if(hasButton) {
+		new.buttonLastState = HAL_GPIO_ReadPin(buttonGPIOPort, buttonGPIOPin);
+	}
 	memcpy(target, &new, sizeof(dre_t));
-	HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
+	HAL_TIM_Encoder_Start(htim, TIM_CHANNEL_ALL);
 }
 void DRE_Update(dre_t *dre, int argcRotation, void *argsRotation, int argcPress,
 		void *argsPress, void *rotationResultOut, void *buttonPressResultOut) {
+
 	dre->rawValue = __HAL_TIM_GET_COUNTER(dre->htim);
+
 	if (dre->rawValue != dre->lastValue) {
+		dre->valueDirty = 1;
 		int32_t difference = (int16_t) (dre->rawValue - dre->lastValue);
-		dre->value += DRE_ConvertCountsToSteps(&s_encoderAccum, difference,
+
+		int32_t steps = DRE_ConvertCountsToSteps(&dre->encoderAccum, difference,
 				dre->countsPerDetent);
+
+		dre->value += steps;
+
 		if (dre->value > dre->max)
 			dre->value = dre->max;
+
 		if (dre->value < dre->min)
 			dre->value = dre->min;
-		if (difference < 0 && dre->onClickDown)
+
+		if (steps < 0 && dre->onClickDown)
 			dre->onClickDown(argcRotation, argsRotation, rotationResultOut);
-		if (difference > 0 && dre->onClickUp)
+
+		if (steps > 0 && dre->onClickUp)
 			dre->onClickUp(argcRotation, argsRotation, rotationResultOut);
+
 		dre->lastValue = dre->rawValue;
 	}
+
 	if (dre->hasButton) {
-		bool pressed = HAL_GPIO_ReadPin(dre->buttonGPIOPort,
+
+		GPIO_PinState pinState = HAL_GPIO_ReadPin(dre->buttonGPIOPort,
 				dre->buttonGPIOPin);
 
+		bool pressed;
+
+		if (dre->buttonActiveLow)
+			pressed = (pinState == GPIO_PIN_RESET);
+		else
+			pressed = (pinState == GPIO_PIN_SET);
+
 		if (dre->isToggle) {
+
 			if (pressed && !dre->buttonLastState) {
 				dre->button = !dre->button;
 
@@ -70,16 +99,20 @@ void DRE_Update(dre_t *dre, int argcRotation, void *argsRotation, int argcPress,
 							buttonPressResultOut);
 			}
 		} else {
-			if (dre->button != pressed) {
-				dre->button = pressed;
+
+			if (pressed && !dre->buttonLastState) {
+				dre->button = true;
 
 				if (dre->onButtonPress)
 					dre->onButtonPress(argcPress, argsPress,
 							buttonPressResultOut);
+			}
+
+			else if (!pressed && dre->buttonLastState) {
+				dre->button = false;
 			}
 		}
 
 		dre->buttonLastState = pressed;
 	}
 }
-
