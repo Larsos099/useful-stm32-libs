@@ -8,7 +8,7 @@
 #ifndef CORE_INC_DRE_H_
 #define CORE_INC_DRE_H_
 #include "main.h"
-typedef uint8_t bool;
+#include <stdbool.h>
 typedef struct {
 	uint32_t rawValue;
 	uint32_t lastValue;
@@ -17,9 +17,9 @@ typedef struct {
 	bool buttonLastState;
 	bool isToggle;
 	int32_t encoderAccum;
-	void (*onClickUp)(uint8_t, void*, void*);
-	void (*onClickDown)(uint8_t, void*, void*);
-	void (*onButtonPress)(uint8_t, void*, void*);
+	void (*onClickUp)(uint8_t, void**, void*);
+	void (*onClickDown)(uint8_t, void**, void*);
+	void (*onButtonPress)(uint8_t, void**, void*);
 	TIM_HandleTypeDef *htim;
 	GPIO_TypeDef *buttonGPIOPort;
 	uint16_t buttonGPIOPin;
@@ -31,14 +31,22 @@ typedef struct {
 	bool buttonActiveLow;
 } dre_t;
 
-void DRE_Init(dre_t *target, TIM_HandleTypeDef *htim, int32_t max, int32_t min,
-		void (*onClickUp)(uint8_t, void*, void*),
-		void (*onClickDown)(uint8_t, void*, void*),
-		void (*onButtonPress)(uint8_t, void*, void*),
+void DRE_Init_ex(dre_t *target, TIM_HandleTypeDef *htim, int32_t max,
+		int32_t min, void (*onClickUp)(uint8_t, void**, void*),
+		void (*onClickDown)(uint8_t, void**, void*),
+		void (*onButtonPress)(uint8_t, void**, void*),
 		GPIO_TypeDef *buttonGPIOPort, uint16_t buttonGPIOPin, bool toggle,
-		int32_t startValue, bool hasButton, uint8_t countsPerDetent, bool buttonActiveLow);
+		int32_t startValue, bool hasButton, uint8_t countsPerDetent,
+		bool buttonActiveLow);
 
-void DRE_Update(dre_t *dre, int argcRotation, void *argsRotation, int argcPress,
-		void *argsPress, void *rotationResultOut, void *buttonPressResultOut);
+void DRE_Init(dre_t *target, TIM_HandleTypeDef *htim, int32_t max, int32_t min,
+		bool hasButton, bool isToggle, int32_t startValue,
+		uint8_t countsPerDetent, bool buttonActiveLow);
+
+void DRE_Update_ex(dre_t *dre, int argcRotation, void **argsRotation,
+		int argcPress, void **argsPress, void *rotationResultOut,
+		void *buttonPressResultOut);
+
+void DRE_Update(dre_t* dre);
 
 #endif /* CORE_INC_DRE_H_ */
