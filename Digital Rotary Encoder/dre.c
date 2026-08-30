@@ -55,7 +55,7 @@ void DRE_Update(dre_t *dre, int argcRotation, void *argsRotation, int argcPress,
 
 	if (dre->rawValue != dre->lastValue) {
 		dre->valueDirty = 1;
-		int32_t difference = (int16_t) (dre->rawValue - dre->lastValue);
+		int32_t difference = (int32_t) (dre->rawValue - dre->lastValue);
 
 		int32_t steps = DRE_ConvertCountsToSteps(&dre->encoderAccum, difference,
 				dre->countsPerDetent);
