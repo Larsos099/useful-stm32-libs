@@ -11,7 +11,7 @@
 #include <stdbool.h>
 typedef struct {
 	uint32_t rawValue;
-	uint32_t lastValue;
+	uint32_t lastRawValue, lastValue;
 	int32_t value, startValue;
 	bool button;
 	bool buttonLastState;
@@ -48,5 +48,18 @@ void DRE_Update_ex(dre_t *dre, int argcRotation, void **argsRotation,
 		void *buttonPressResultOut);
 
 void DRE_Update(dre_t* dre);
+/*
+ * Lightweight polling helpers for an encoder that is dedicated to a single
+ * consumer (e.g. a menu_t). Unlike DRE_Update()/DRE_Update_ex(), these do
+ * NOT touch value/min/max/button/isToggle - they only report what changed
+ * since the last call, using the same rawValue/lastRawValue/encoderAccum
+ * and buttonLastState bookkeeping fields.
+ *
+ * Do not mix these with DRE_Update()/DRE_Update_ex() on the same dre_t -
+ * both styles update the same bookkeeping fields and would fight over them.
+ * Dedicate one dre_t per consumer.
+ */
 
+int32_t DRE_ReadStepDelta(dre_t *dre);
+bool DRE_ReadButtonEdge(dre_t *dre);
 #endif /* CORE_INC_DRE_H_ */
