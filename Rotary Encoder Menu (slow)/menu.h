@@ -65,6 +65,10 @@ typedef struct {
 	const uint8_t *bitmap; // 1bpp, MSB-first, row-major, rows padded to a byte
 	uint16_t width;
 	uint16_t height;
+	bool hasBgOverride;  // true = ignore the normal tab/row bg and use bgOverride instead
+	uint16_t bgOverride; // backdrop color for this icon specifically, when hasBgOverride is set
+	bool hasFgOverride;  // true = ignore the normal tab/row bg and use bgOverride instead
+	uint16_t fgOverride; // backdrop color for this icon specifically, when hasBgOverride is set
 } menu_icon_t;
 
 typedef struct menu_row menu_row_t;

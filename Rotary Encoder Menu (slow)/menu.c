@@ -349,6 +349,11 @@ static void menu_render_tabs(menu_t *m) {
 				active ? m->layout.tabActiveBgColor : m->layout.tabBgColor;
 		uint16_t fg =
 				active ? m->layout.tabActiveFgColor : m->layout.tabFgColor;
+		uint16_t tabBg = scr->tabIcon.hasBgOverride ?
+						scr->tabIcon.bgOverride : bg;
+		uint16_t tabFg = scr->tabIcon.hasFgOverride ?
+								scr->tabIcon.fgOverride : fg;
+
 
 		ST7789_Fill(x, y, x + m->layout.tabSize - 1, y + m->layout.tabSize - 1,
 				bg);
@@ -363,7 +368,7 @@ static void menu_render_tabs(menu_t *m) {
 					(uint16_t) (y
 							+ (ih < m->layout.tabSize ?
 									(m->layout.tabSize - ih) / 2 : 0));
-			ST7789_DrawBitmap1BPP(ix, iy, iw, ih, scr->tabIcon.bitmap, fg, bg);
+			ST7789_DrawBitmap1BPP(ix, iy, iw, ih, scr->tabIcon.bitmap, tabFg, tabBg);
 		}
 
 		if (active && m->focus == MENU_FOCUS_TABS) {
