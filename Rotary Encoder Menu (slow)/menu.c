@@ -12,11 +12,10 @@
 /* Defined in st7789.c but not exposed via st7789.h; reused here so float
  * values don't need printf's %f (avoids the newlib-nano float-printf issue). */
 extern void LCD_FloatToString(float num, char *buf, uint8_t decimals);
-
+extern const char** language;
 /* Layout / style tuning for values not exposed via menu_layout_t ---------*/
 #define MENU_FLOAT_DECIMALS 2
 #define MENU_VALUE_STR_SZ   24
-
 /* ------------------------------------------------------------------------
  * Forward declarations (definition order below follows the public API,
  * geometry helpers are used before they're textually defined otherwise).
@@ -185,6 +184,12 @@ static void menu_value_to_string(const menu_row_t *row, char *out,
 		out[n] = '\0';
 		break;
 	}
+	case MENU_BOOL: {
+		bool v;
+		memcpy(&v, row->value.ap, sizeof v);
+		snprintf(out, out_sz, "%s", v ? ON_STR : OFF_STR);
+		break;
+	}
 	}
 
 	if (row->suffix && row->suffix[0]) {
@@ -236,9 +241,10 @@ static void menu_render_row_full(menu_t *m, menu_screen_t *s, size_t rowIdx,
 	if (row->kind == MENU_ROW_ICON_LIST && row->iconCount) {
 		const menu_icon_t *icon = &row->icons[row->iconIndex];
 		uint16_t iw = icon->width, ih = icon->height;
-		uint16_t ix = (iw + m->layout.rowPadX < ST7789_WIDTH) ?
-		              (ST7789_WIDTH - m->layout.rowPadX - iw) :
-		              m->layout.rowPadX;
+		uint16_t ix =
+				(iw + m->layout.rowPadX < ST7789_WIDTH) ?
+						(ST7789_WIDTH - m->layout.rowPadX - iw) :
+						m->layout.rowPadX;
 		uint16_t iy = (uint16_t) (top
 				+ ((contentH > ih) ? (contentH - ih) / 2 : 0));
 		if (icon->bitmap)
@@ -349,11 +355,10 @@ static void menu_render_tabs(menu_t *m) {
 				active ? m->layout.tabActiveBgColor : m->layout.tabBgColor;
 		uint16_t fg =
 				active ? m->layout.tabActiveFgColor : m->layout.tabFgColor;
-		uint16_t tabBg = scr->tabIcon.hasBgOverride ?
-						scr->tabIcon.bgOverride : bg;
-		uint16_t tabFg = scr->tabIcon.hasFgOverride ?
-								scr->tabIcon.fgOverride : fg;
-
+		uint16_t tabBg =
+				scr->tabIcon.hasBgOverride ? scr->tabIcon.bgOverride : bg;
+		uint16_t tabFg =
+				scr->tabIcon.hasFgOverride ? scr->tabIcon.fgOverride : fg;
 
 		ST7789_Fill(x, y, x + m->layout.tabSize - 1, y + m->layout.tabSize - 1,
 				bg);
@@ -368,7 +373,8 @@ static void menu_render_tabs(menu_t *m) {
 					(uint16_t) (y
 							+ (ih < m->layout.tabSize ?
 									(m->layout.tabSize - ih) / 2 : 0));
-			ST7789_DrawBitmap1BPP(ix, iy, iw, ih, scr->tabIcon.bitmap, tabFg, tabBg);
+			ST7789_DrawBitmap1BPP(ix, iy, iw, ih, scr->tabIcon.bitmap, tabFg,
+					tabBg);
 		}
 
 		if (active && m->focus == MENU_FOCUS_TABS) {
@@ -471,11 +477,15 @@ static void menu_move_row(menu_t *m, menu_screen_t *s, int32_t delta) {
 		menu_render_screen(m);
 	} else {
 		/* Otherwise, only re-render the two affected rows (old and new selection) */
-		if (oldSelection >= s->scrollOffset && oldSelection < s->scrollOffset + visible) {
-			menu_render_row_full(m, s, oldSelection, oldSelection - s->scrollOffset);
+		if (oldSelection >= s->scrollOffset
+				&& oldSelection < s->scrollOffset + visible) {
+			menu_render_row_full(m, s, oldSelection,
+					oldSelection - s->scrollOffset);
 		}
-		if (s->selection >= s->scrollOffset && s->selection < s->scrollOffset + visible) {
-			menu_render_row_full(m, s, s->selection, s->selection - s->scrollOffset);
+		if (s->selection >= s->scrollOffset
+				&& s->selection < s->scrollOffset + visible) {
+			menu_render_row_full(m, s, s->selection,
+					s->selection - s->scrollOffset);
 		}
 	}
 }
@@ -538,6 +548,14 @@ static void menu_apply_delta(menu_row_t *row, int32_t delta) {
 		if (nv > row->range.i.max)
 			nv = row->range.i.max;
 		v = (uint64_t) nv;
+		memcpy(row->value.ap, &v, sizeof v);
+		break;
+	}
+	case MENU_BOOL: {
+		bool v;
+		memcpy(&v, row->value.ap, sizeof v);
+		if (delta)
+			v = !v;
 		memcpy(row->value.ap, &v, sizeof v);
 		break;
 	}
@@ -699,69 +717,81 @@ void menu_row_init_icon_list(menu_row_t *row, const char *label,
 	row->bgColor = BLACK;
 }
 
-void menu_row_set_colors(menu_row_t *row, uint16_t fgColor, uint16_t bgColor) {
+void menu_row_init_boolean(menu_row_t *row, const char *label,
+bool initial, bool editable) {
 	if (!row)
 		return;
-	row->fgColor = fgColor;
-	row->bgColor = bgColor;
+	memset(row, 0, sizeof(*row));
+	row->label = label;
+	row->kind = MENU_ROW_VALUE;
+	row->typeinfo = MENU_BOOL;
+	row->editable = editable;
+	any_make(&initial, sizeof(initial), NULL, &row->value);
+	row->fgColor = WHITE;
+	row->bgColor = BLACK;
+}
+
+
+void menu_row_set_colors(menu_row_t *row, uint16_t fgColor, uint16_t bgColor) {
+if (!row)
+	return;
+row->fgColor = fgColor;
+row->bgColor = bgColor;
 }
 
 void menu_row_set_callbacks(menu_row_t *row,
-		void (*onChange)(menu_row_t*, void*),
-		void (*onCommit)(menu_row_t*, void*), void *ctx) {
-	if (!row)
-		return;
-	row->onChange = onChange;
-	row->onCommit = onCommit;
-	row->ctx = ctx;
+	void (*onChange)(menu_row_t*, void*), void (*onCommit)(menu_row_t*, void*),
+	void *ctx) {
+if (!row)
+	return;
+row->onChange = onChange;
+row->onCommit = onCommit;
+row->ctx = ctx;
 }
 
 void menu_screen_init(menu_screen_t *screen, menu_row_t *rows, size_t rowCount,
-		const menu_icon_t *tabIcon) {
-	if (!screen)
-		return;
-	memset(screen, 0, sizeof(*screen));
-	screen->rows = rows;
-	screen->rowCount = rowCount;
-	if (tabIcon)
-		screen->tabIcon = *tabIcon;
+	const menu_icon_t *tabIcon) {
+if (!screen)
+	return;
+memset(screen, 0, sizeof(*screen));
+screen->rows = rows;
+screen->rowCount = rowCount;
+if (tabIcon)
+	screen->tabIcon = *tabIcon;
 }
 
 menu_layout_t menu_layout_default(void) {
-	menu_layout_t l =
-			{ .font = Font_11x18, .rowHeight = 0, .rowPadX = 6,
-					.rowSeparatorHeight = 2, .rowSeparatorColor = GRAY,
-					.tabBarHeight = 40, .tabSize = 30, .tabGap = 4,
-					.tabBarSeparatorHeight = 6, .tabBarSeparatorColor = GRAY,
-					.tabBgColor = BLACK, .tabFgColor = WHITE,
-					.tabActiveBgColor = LARS, .tabActiveFgColor = BLACK,
-					.tabFocusBorderColor = WHITE, .editAccentColor = YELLOW,
-					.bg = BLACK };
+menu_layout_t l = { .font = Font_11x18, .rowHeight = 0, .rowPadX = 6,
+		.rowSeparatorHeight = 2, .rowSeparatorColor = GRAY, .tabBarHeight = 40,
+		.tabSize = 30, .tabGap = 4, .tabBarSeparatorHeight = 6,
+		.tabBarSeparatorColor = GRAY, .tabBgColor = BLACK, .tabFgColor = WHITE,
+		.tabActiveBgColor = LARS, .tabActiveFgColor = BLACK,
+		.tabFocusBorderColor = WHITE, .editAccentColor = YELLOW, .bg = BLACK };
 
-	return l;
+return l;
 }
 
 void menu_init(menu_t *m, menu_screen_t *screens, size_t screenCount,
-		menu_input_mode_e inputMode, dre_t *navEncoder, dre_t *valueEncoder,
-		menu_layout_t *layout) {
-	if (!m)
-		return;
+	menu_input_mode_e inputMode, dre_t *navEncoder, dre_t *valueEncoder,
+	menu_layout_t *layout) {
+if (!m)
+	return;
 
-	menu_layout_t lay = layout ? *layout : menu_layout_default();
+menu_layout_t lay = layout ? *layout : menu_layout_default();
 
-	*m = (menu_t ) { .screens = screens, .screenCount = screenCount,
-					.currentScreen = 0, .tabScrollOffset = 0, .focus =
-							(screenCount > 1 && lay.tabBarHeight) ?
-									MENU_FOCUS_TABS : MENU_FOCUS_ROWS,
-					.inputMode = inputMode, .navEncoder = navEncoder,
-					.valueEncoder = valueEncoder, .layout = lay, };
+*m = (menu_t ) { .screens = screens, .screenCount = screenCount,
+				.currentScreen = 0, .tabScrollOffset = 0, .focus =
+						(screenCount > 1 && lay.tabBarHeight) ?
+								MENU_FOCUS_TABS : MENU_FOCUS_ROWS, .inputMode =
+						inputMode, .navEncoder = navEncoder, .valueEncoder =
+						valueEncoder, .layout = lay, };
 
-	/* Prime the encoder(s) so the first menu_update() doesn't see a
-	 * spurious jump from whatever the counter happened to be at boot. */
-	if (navEncoder)
-		(void) DRE_ReadStepDelta(navEncoder);
-	if (valueEncoder)
-		(void) DRE_ReadStepDelta(valueEncoder);
+/* Prime the encoder(s) so the first menu_update() doesn't see a
+ * spurious jump from whatever the counter happened to be at boot. */
+if (navEncoder)
+	(void) DRE_ReadStepDelta(navEncoder);
+if (valueEncoder)
+	(void) DRE_ReadStepDelta(valueEncoder);
 }
 
 void menu_set_row_value(menu_t *m, size_t screenIndex, size_t rowIndex,

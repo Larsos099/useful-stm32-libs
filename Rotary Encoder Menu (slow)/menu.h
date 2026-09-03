@@ -16,7 +16,7 @@
 
 #include "fonts.h"
 #include "dre.h"
-
+#include "lang.h"
 #define ANY_MAX_SZ 64
 
 /* ---------------------------------------------------------------------
@@ -53,7 +53,7 @@ static inline void any_destroy(any_t *any) {
 }
 
 typedef enum {
-	MENU_FLOAT = 0, MENU_INT, MENU_SHORT, MENU_U64, MENU_STRING
+	MENU_FLOAT = 0, MENU_INT, MENU_SHORT, MENU_U64, MENU_STRING, MENU_BOOL
 } menu_value_type_e;
 
 typedef enum {
@@ -185,10 +185,13 @@ void menu_row_init_string(menu_row_t *row, const char *label,
 void menu_row_init_icon_list(menu_row_t *row, const char *label,
 		const menu_icon_t *icons, size_t iconCount, size_t initialIndex,
 		bool editable);
+void menu_row_init_boolean(menu_row_t *row, const char *label,
+		bool initial, bool editable);
 void menu_row_set_colors(menu_row_t *row, uint16_t fgColor, uint16_t bgColor);
 void menu_row_set_callbacks(menu_row_t *row,
 		void (*onChange)(menu_row_t*, void*),
 		void (*onCommit)(menu_row_t*, void*), void *ctx);
+
 
 /* Screen ------------------------------------------------------------------
  * tabIcon may be NULL if the screen will only ever be the sole screen in
