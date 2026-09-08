@@ -221,13 +221,13 @@ static void menu_render_row_full(menu_t *m, menu_screen_t *s, size_t rowIdx,
 		uint16_t bottom = (uint16_t) (top + contentH - 1);
 		if (bottom >= ST7789_HEIGHT)
 			bottom = ST7789_HEIGHT - 1;
-		ST7789_Fill(0, top, ST7789_WIDTH - 1, bottom, bg);
+		ST7789_Fill(m->cs, 0, top, ST7789_WIDTH - 1, bottom, bg);
 	}
 	if (contentH < h) {
 		uint16_t sepBottom = (uint16_t) (top + h - 1);
 		if (sepBottom >= ST7789_HEIGHT)
 			sepBottom = ST7789_HEIGHT - 1;
-		ST7789_Fill(0, top + contentH, ST7789_WIDTH - 1, sepBottom,
+		ST7789_Fill(m->cs, 0, top + contentH, ST7789_WIDTH - 1, sepBottom,
 				m->layout.rowSeparatorColor);
 	}
 
@@ -235,7 +235,7 @@ static void menu_render_row_full(menu_t *m, menu_screen_t *s, size_t rowIdx,
 	uint16_t textY = (uint16_t) (top
 			+ ((contentH > font.height) ? (contentH - font.height) / 2 : 0));
 
-	ST7789_WriteString_Fast(m->layout.rowPadX, textY,
+	ST7789_WriteString_Fast(m->cs, m->layout.rowPadX, textY,
 			row->label ? row->label : "", font, fg, bg);
 
 	if (row->kind == MENU_ROW_ICON_LIST && row->iconCount) {
@@ -248,7 +248,7 @@ static void menu_render_row_full(menu_t *m, menu_screen_t *s, size_t rowIdx,
 		uint16_t iy = (uint16_t) (top
 				+ ((contentH > ih) ? (contentH - ih) / 2 : 0));
 		if (icon->bitmap)
-			ST7789_DrawBitmap1BPP(ix, iy, iw, ih, icon->bitmap, fg, bg);
+			ST7789_DrawBitmap1BPP(m->cs, ix, iy, iw, ih, icon->bitmap, fg, bg);
 		row->_lastIconIndex = row->iconIndex;
 	} else {
 		char text[MENU_VALUE_STR_SZ];
@@ -259,7 +259,7 @@ static void menu_render_row_full(menu_t *m, menu_screen_t *s, size_t rowIdx,
 				(uint16_t) (w + m->layout.rowPadX < ST7789_WIDTH) ?
 						(uint16_t) (ST7789_WIDTH - m->layout.rowPadX - w) :
 						m->layout.rowPadX;
-		ST7789_WriteString_Fast(vx, textY, text, font, textFg, bg);
+		ST7789_WriteString_Fast(m->cs, vx, textY, text, font, textFg, bg);
 		strncpy(row->_lastText, text, sizeof(row->_lastText) - 1);
 		row->_lastText[sizeof(row->_lastText) - 1] = '\0';
 	}
@@ -293,10 +293,10 @@ static void menu_render_row_value_only(menu_t *m, menu_screen_t *s,
 		uint16_t iy = (uint16_t) (top
 				+ ((contentH > ih) ? (contentH - ih) / 2 : 0));
 
-		ST7789_Fill(ix, iy, ST7789_WIDTH - m->layout.rowPadX - 1, iy + ih - 1,
+		ST7789_Fill(m->cs, ix, iy, ST7789_WIDTH - m->layout.rowPadX - 1, iy + ih - 1,
 				bg);
 		if (icon->bitmap)
-			ST7789_DrawBitmap1BPP(ix, iy, iw, ih, icon->bitmap, fg, bg);
+			ST7789_DrawBitmap1BPP(m->cs, ix, iy, iw, ih, icon->bitmap, fg, bg);
 		row->_lastIconIndex = row->iconIndex;
 		return;
 	}
@@ -313,7 +313,7 @@ static void menu_render_row_value_only(menu_t *m, menu_screen_t *s,
 					(uint16_t) (ST7789_WIDTH - m->layout.rowPadX - clearW) :
 					m->layout.rowPadX;
 
-	ST7789_Fill(clearX, textY, ST7789_WIDTH - m->layout.rowPadX - 1,
+	ST7789_Fill(m->cs, clearX, textY, ST7789_WIDTH - m->layout.rowPadX - 1,
 			textY + font.height - 1, bg);
 
 	uint16_t textFg = row->_editing ? m->layout.editAccentColor : fg;
@@ -322,7 +322,7 @@ static void menu_render_row_value_only(menu_t *m, menu_screen_t *s,
 			(uint16_t) (w + m->layout.rowPadX < ST7789_WIDTH) ?
 					(uint16_t) (ST7789_WIDTH - m->layout.rowPadX - w) :
 					m->layout.rowPadX;
-	ST7789_WriteString_Fast(vx, textY, text, font, textFg, bg);
+	ST7789_WriteString_Fast(m->cs, vx, textY, text, font, textFg, bg);
 
 	strncpy(row->_lastText, text, sizeof(row->_lastText) - 1);
 	row->_lastText[sizeof(row->_lastText) - 1] = '\0';
@@ -335,7 +335,7 @@ static void menu_render_tabs(menu_t *m) {
 
 	menu_clamp_tab_scroll(m);
 
-	ST7789_Fill(0, 0, ST7789_WIDTH - 1, m->layout.tabBarHeight - 1,
+	ST7789_Fill(m->cs, 0, 0, ST7789_WIDTH - 1, m->layout.tabBarHeight - 1,
 			m->layout.bg);
 
 	size_t visible = menu_visible_tabs(m);
@@ -360,7 +360,7 @@ static void menu_render_tabs(menu_t *m) {
 		uint16_t tabFg =
 				scr->tabIcon.hasFgOverride ? scr->tabIcon.fgOverride : fg;
 
-		ST7789_Fill(x, y, x + m->layout.tabSize - 1, y + m->layout.tabSize - 1,
+		ST7789_Fill(m->cs, x, y, x + m->layout.tabSize - 1, y + m->layout.tabSize - 1,
 				bg);
 
 		if (scr->tabIcon.bitmap && scr->tabIcon.width && scr->tabIcon.height) {
@@ -373,7 +373,7 @@ static void menu_render_tabs(menu_t *m) {
 					(uint16_t) (y
 							+ (ih < m->layout.tabSize ?
 									(m->layout.tabSize - ih) / 2 : 0));
-			ST7789_DrawBitmap1BPP(ix, iy, iw, ih, scr->tabIcon.bitmap, tabFg,
+			ST7789_DrawBitmap1BPP(m->cs, ix, iy, iw, ih, scr->tabIcon.bitmap, tabFg,
 					tabBg);
 		}
 
@@ -387,10 +387,10 @@ static void menu_render_tabs(menu_t *m) {
 			if (by1 >= ST7789_HEIGHT)
 				by1 = ST7789_HEIGHT - 1;
 			uint16_t c = m->layout.tabFocusBorderColor;
-			ST7789_Fill(bx0, by0, bx1, by0, c); // top
-			ST7789_Fill(bx0, by1, bx1, by1, c); // bottom
-			ST7789_Fill(bx0, by0, bx0, by1, c); // left
-			ST7789_Fill(bx1, by0, bx1, by1, c); // right
+			ST7789_Fill(m->cs, bx0, by0, bx1, by0, c); // top
+			ST7789_Fill(m->cs, bx0, by1, bx1, by1, c); // bottom
+			ST7789_Fill(m->cs, bx0, by0, bx0, by1, c); // left
+			ST7789_Fill(m->cs, bx1, by0, bx1, by1, c); // right
 		}
 	}
 
@@ -399,7 +399,7 @@ static void menu_render_tabs(menu_t *m) {
 				+ m->layout.tabBarSeparatorHeight - 1);
 		if (sepBottom >= ST7789_HEIGHT)
 			sepBottom = ST7789_HEIGHT - 1;
-		ST7789_Fill(0, m->layout.tabBarHeight, ST7789_WIDTH - 1, sepBottom,
+		ST7789_Fill(m->cs, 0, m->layout.tabBarHeight, ST7789_WIDTH - 1, sepBottom,
 				m->layout.tabBarSeparatorColor);
 	}
 }
@@ -413,7 +413,7 @@ static void menu_render_screen(menu_t *m) {
 	uint16_t areaTop = menu_row_area_top(m);
 	uint16_t areaH = menu_row_area_height(m);
 	if (areaH)
-		ST7789_Fill(0, areaTop, ST7789_WIDTH - 1, areaTop + areaH - 1,
+		ST7789_Fill(m->cs, 0, areaTop, ST7789_WIDTH - 1, areaTop + areaH - 1,
 				m->layout.bg);
 
 	size_t visible = menu_visible_rows(m, s);

@@ -159,7 +159,7 @@ typedef struct {
 	size_t screenCount;
 	size_t currentScreen;
 	size_t tabScrollOffset;
-
+	uint8_t cs;
 	menu_focus_e focus;
 
 	menu_input_mode_e inputMode;
