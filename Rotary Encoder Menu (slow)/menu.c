@@ -10,9 +10,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "lang.h"
+
 extern void LCD_FloatToString(float num, char *buf, uint8_t decimals);
-extern const char** language;
+extern uint8_t language;
 
 #define MENU_FLOAT_DECIMALS 2
 #define MENU_VALUE_STR_SZ   32
@@ -151,14 +151,6 @@ static void menu_sdfloat_cycle_digit(menu_row_t *row, int32_t delta) {
 	int32_t nInt = (int32_t) row->sdIntDigits;
 	int32_t nDec = (int32_t) row->sdDecDigits;
 	bool hasSign = (row->range.f.min < 0.0f);
-	int32_t maxIntValue = menu_pow10(row->sdIntDigits) - 1;
-	int32_t mult = menu_pow10(row->sdDecDigits);
-
-	float v;
-	memcpy(&v, row->value.ap, sizeof v);
-	int32_t intPart, fracPart;
-	bool isNeg;
-	menu_sdfloat_decompose(v, maxIntValue, row->sdDecDigits, &intPart, &fracPart, &isNeg);
 
 	int32_t offset = hasSign ? 1 : 0;
 	int32_t idx = (int32_t) row->_sdDigit;
@@ -166,35 +158,46 @@ static void menu_sdfloat_cycle_digit(menu_row_t *row, int32_t delta) {
 	if (idx < 0) idx = 0;
 	if (idx > maxIdx) idx = maxIdx;
 
+	float v;
+	memcpy(&v, row->value.ap, sizeof v);
+
 	if (hasSign && idx == 0) {
-		/* Sign digit: toggled independently of the magnitude below. */
-		isNeg = !isNeg;
+		/* Sign digit: flip the sign of the current value */
+		v = -v;
 	} else {
-		/* Bump the whole magnitude by one unit at the selected digit's place
-		 * value, so a carry/borrow ripples into the neighboring digits
-		 * (e.g. 0.19 -> 0.20 when scrolling up on the last decimal digit)
-		 * instead of just wrapping that single digit in isolation. */
-		int32_t place = menu_pow10((uint8_t) (maxIdx - idx));
-		int32_t total = intPart * mult + fracPart;
-		int32_t maxTotal = maxIntValue * mult + (mult - 1);
-		int32_t range = maxTotal + 1;
+		/* Calculate position index relative to the decimal point */
+		int32_t digitPos = maxIdx - idx;
+		int32_t exponent = digitPos - nDec;
 
-		total += delta * place;
-		total = ((total % range) + range) % range;
+		float stepValue = 1.0f;
+		if (exponent > 0) {
+			stepValue = (float)menu_pow10((uint8_t)exponent);
+		} else if (exponent < 0) {
+			stepValue = 1.0f / (float)menu_pow10((uint8_t)(-exponent));
+		}
 
-		intPart = total / mult;
-		fracPart = total % mult;
+		if (delta < 0) {
+			if (fabsf(v - stepValue) < 0.0001f && stepValue > 1.0f) {
+				/* Smart borrow: 100 -> 99 */
+				v = stepValue - 1.0f;
+			} else if (v < stepValue && stepValue > 1.0f) {
+				/* Prevent large digit steps from plunging the value to 0
+				 * when already below the step threshold (e.g. staying at 99) */
+				v = v;
+			} else {
+				v += (float)delta * stepValue;
+			}
+		} else if (delta > 0) {
+			v += (float)delta * stepValue;
+		}
 	}
 
-	float newV = (float) intPart + (float) fracPart / (float) mult;
-	if (isNeg) newV = -newV;
+	/* Progressive scroll: smoothly clamp value within allowed bounds */
+	if (v < row->range.f.min) v = row->range.f.min;
+	if (v > row->range.f.max) v = row->range.f.max;
 
-	if (newV < row->range.f.min) newV = row->range.f.min;
-	if (newV > row->range.f.max) newV = row->range.f.max;
-
-	memcpy(row->value.ap, &newV, sizeof newV);
+	memcpy(row->value.ap, &v, sizeof v);
 }
-
 /* Value Formatting */
 static void menu_value_to_string(const menu_row_t *row, char *out, size_t out_sz) {
 	if (!out || out_sz == 0) return;
@@ -209,32 +212,38 @@ static void menu_value_to_string(const menu_row_t *row, char *out, size_t out_sz
 		break;
 	}
 	case MENU_SDFLOAT: {
-		float f;
-		memcpy(&f, row->value.ap, sizeof f);
-		bool hasSign = (row->range.f.min < 0.0f);
-		int32_t maxIntValue = menu_pow10(row->sdIntDigits) - 1;
-		int32_t intPart, fracPart;
-		bool isNeg;
-		menu_sdfloat_decompose(f, maxIntValue, row->sdDecDigits, &intPart, &fracPart, &isNeg);
+			float f;
+			memcpy(&f, row->value.ap, sizeof f);
 
-		char formatStr[32];
-		if (hasSign) {
-			snprintf(formatStr, sizeof(formatStr), "%c%%0%dld.%%0%dld", isNeg ? '-' : ' ', (int)row->sdIntDigits, (int)row->sdDecDigits);
-		} else {
-			snprintf(formatStr, sizeof(formatStr), "%%0%dld.%%0%dld", (int)row->sdIntDigits, (int)row->sdDecDigits);
-		}
-		snprintf(out, out_sz, formatStr, (long)intPart, (long)fracPart);
-
-		int startIdx = hasSign ? 1 : 0;
-		for (int i = startIdx; i < startIdx + row->sdIntDigits - 1; i++) {
-			if (out[i] == '0') {
-				out[i] = ' ';
-			} else {
-				break;
+			/* Avoid negative zero artifacts around 0.00 */
+			if (fabsf(f) < 0.0001f) {
+				f = 0.0f;
 			}
+
+			bool hasSign = (row->range.f.min < 0.0f);
+			int32_t maxIntValue = menu_pow10(row->sdIntDigits) - 1;
+			int32_t intPart, fracPart;
+			bool isNeg;
+			menu_sdfloat_decompose(f, maxIntValue, row->sdDecDigits, &intPart, &fracPart, &isNeg);
+
+			char formatStr[32];
+			if (hasSign) {
+				snprintf(formatStr, sizeof(formatStr), "%c%%0%dld.%%0%dld", (isNeg && f != 0.0f) ? '-' : ' ', (int)row->sdIntDigits, (int)row->sdDecDigits);
+			} else {
+				snprintf(formatStr, sizeof(formatStr), "%%0%dld.%%0%dld", (int)row->sdIntDigits, (int)row->sdDecDigits);
+			}
+			snprintf(out, out_sz, formatStr, (long)intPart, (long)fracPart);
+
+			int startIdx = hasSign ? 1 : 0;
+			for (int i = startIdx; i < startIdx + row->sdIntDigits - 1; i++) {
+				if (out[i] == '0') {
+					out[i] = ' ';
+				} else {
+					break;
+				}
+			}
+			break;
 		}
-		break;
-	}
 	case MENU_INT: {
 		int v;
 		memcpy(&v, row->value.ap, sizeof v);
@@ -262,7 +271,7 @@ static void menu_value_to_string(const menu_row_t *row, char *out, size_t out_sz
 	case MENU_BOOL: {
 		bool v;
 		memcpy(&v, row->value.ap, sizeof v);
-		snprintf(out, out_sz, "%s", v ? ON_STR : OFF_STR);
+		snprintf(out, out_sz, "%s", v ? ON_STR(language) : OFF_STR(language));
 		break;
 	}
 	case MENU_ENUM_STR: {
