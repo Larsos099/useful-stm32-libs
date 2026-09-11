@@ -10,13 +10,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include "lang.h"
 extern void LCD_FloatToString(float num, char *buf, uint8_t decimals);
+extern const char** language;
 
 #define MENU_FLOAT_DECIMALS 2
 #define MENU_VALUE_STR_SZ   32
-#define MENU_TAB_HOLD_MS    1000u
-#define ON_STR "true"
-#define OFF_STR "false"
+#define MENU_TAB_HOLD_MS    2000u
+
 /* Forward declarations */
 static uint16_t menu_row_area_top(const menu_t *m);
 static uint16_t menu_row_area_height(const menu_t *m);
